@@ -1,0 +1,24 @@
+# vType - Production Dependencies
+# Python >= 3.10 (recommended 3.12)
+
+# Audio Capture (PortAudio bindings, NumPy array output)
+sounddevice>=0.4.6
+
+# Voice Activity Detection (Google WebRTC VAD algorithm)
+# Use webrtcvad-wheels for pre-built wheels on Python 3.12+
+webrtcvad-wheels>=2.0.10
+
+# Speech Recognition (CTranslate2 Whisper C++ inference)
+faster-whisper>=1.0.3
+
+# Keyboard Simulation (cross-platform input simulation)
+pynput>=1.7.6
+
+# Clipboard Fallback (cross-platform clipboard access)
+pyperclip>=1.8.2
+
+# CLI Framework (command-line argument parsing)
+click>=8.1.0
+
+# Numerical Computing (audio data processing)
+numpy>=1.24.0

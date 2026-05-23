@@ -1,0 +1,17 @@
+# vType - Development Dependencies
+
+# Testing Framework
+pytest>=7.4.0
+pytest-mock>=3.12.0
+pytest-cov>=4.1.0
+pytest-timeout>=2.2.0
+
+# Code Quality
+ruff>=0.5.0
+mypy>=1.10.0
+
+# Type Stubs
+types-setuptools>=70.0.0
+
+# Process Monitoring (for memory/CPU benchmarks)
+psutil>=5.9.0
