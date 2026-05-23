@@ -83,10 +83,9 @@ FRAME_DURATION_MS: Final[int] = _env_int("VTYPE_FRAME_DURATION_MS", 20)
 # User can override via VTYPE_BLOCK_SIZE, but it will be validated.
 # Default calculation: 16000 * 20 / 1000 = 320 samples/frame
 _env_bs = _env_int("VTYPE_BLOCK_SIZE", -1)
-if _env_bs > 0:
-    BLOCK_SIZE: Final[int] = _env_bs
-else:
-    BLOCK_SIZE: Final[int] = SAMPLE_RATE * FRAME_DURATION_MS // 1000
+BLOCK_SIZE: Final[int] = (
+    _env_bs if _env_bs > 0 else SAMPLE_RATE * FRAME_DURATION_MS // 1000
+)
 
 DTYPE: Final[str] = _env_str("VTYPE_DTYPE", "int16")
 """Audio sample data type. 'int16' for VAD, 'float32' for Whisper input."""

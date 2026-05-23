@@ -10,8 +10,6 @@ Covers:
 
 import os
 import sys
-import importlib
-from unittest import mock
 
 import pytest
 
@@ -26,20 +24,41 @@ def reset_config_module():
     """Reset config module and environment before each test.
 
     We re-import config.py to ensure it picks up the current os.environ state.
+    Saves and restores sys.modules["config"] to avoid poisoning other test
+    modules that hold references to the original config (e.g. main.py tests).
     """
+    # Save the original config module so we can restore it after this test
+    _saved_config = sys.modules.get("config")
+    _saved_submodules = {
+        name: mod
+        for name, mod in sys.modules.items()
+        if name.startswith("config.")
+    }
+
     # Clear VTYPE_* env vars from this test
     keys_to_remove = [k for k in os.environ if k.startswith("VTYPE_")]
     for k in keys_to_remove:
         del os.environ[k]
 
-    # Remove config from sys.modules so importlib.reload works
+    # Remove config from sys.modules so re-import picks up env changes
     for mod_name in list(sys.modules.keys()):
         if mod_name == "config" or mod_name.startswith("config."):
             del sys.modules[mod_name]
 
     yield
 
-    # Cleanup after test
+    # Cleanup: restore original config module so other test files
+    # that imported it (e.g. main.py) stay consistent. Failing to
+    # do this causes cross-file module identity mismatch and test hangs.
+    for mod_name in list(sys.modules.keys()):
+        if mod_name == "config" or mod_name.startswith("config."):
+            del sys.modules[mod_name]
+    if _saved_config is not None:
+        sys.modules["config"] = _saved_config
+    for name, mod in _saved_submodules.items():
+        sys.modules[name] = mod
+
+    # Clear VTYPE_* env vars after test
     keys_to_remove = [k for k in os.environ if k.startswith("VTYPE_")]
     for k in keys_to_remove:
         del os.environ[k]

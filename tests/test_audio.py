@@ -9,7 +9,6 @@ Covers:
 """
 
 import queue
-import threading
 from unittest import mock
 
 import numpy as np
