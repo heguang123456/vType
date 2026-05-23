@@ -45,6 +45,7 @@ models/
 .coverage
 htmlcov/
 .pytest_cache/
+test_results.txt
 
 # MyPy
 .mypy_cache/
