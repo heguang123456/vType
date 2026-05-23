@@ -4,7 +4,7 @@
 
 [![Python](https://img.shields.io/badge/python-%3E%3D3.10-blue?logo=python)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
-[![Phase 1](https://img.shields.io/badge/phase-1%20完成-brightgreen)](#-phase-1--基础设施)
+[![Phase 3](https://img.shields.io/badge/phase-3%20完成-brightgreen)](#-phase-1--基础设施)
 
 **vType** 是一款完全运行在本地、轻量级、跨平台的命令行语音输入工具。对着麦克风说话，识别出的文字会自动输出到当前光标位置——就像用声音驱动的虚拟键盘。
 
@@ -114,34 +114,34 @@ vType/
 ├── REQUIREMENTS.md              # 详细需求规格文档
 ├── prompt.md                    # 原始项目定义
 ├── config.py                    # 全局配置中心（17 个常量）
-├── main.py                      # CLI 入口（Phase 2）
+├── main.py                      # M-07：CLI 入口（click 框架）
 ├── requirements.txt             # 生产依赖
 ├── requirements-dev.txt         # 开发依赖
 ├── core/
 │   ├── __init__.py
 │   ├── audio.py                 # M-02：音频捕获（sounddevice InputStream）
 │   ├── detector.py              # M-03：人声检测与静音切片
-│   ├── recognizer.py            # M-04：ASR 推理（faster-whisper）[待实现]
-│   ├── typer.py                 # M-05：键盘模拟与剪贴板 [待实现]
-│   └── manager.py               # M-06：核心调度与线程生命周期 [待实现]
+│   ├── recognizer.py            # M-04：ASR 推理（faster-whisper, int8）
+│   ├── typer.py                 # M-05：键盘模拟 + 剪贴板兜底
+│   └── manager.py               # M-06：核心调度与线程生命周期
 ├── utils/
 │   ├── __init__.py
-│   ├── clipboard.py             # M-08：跨平台剪贴板封装 [待实现]
-│   └── key_monitor.py           # M-09：全局快捷键监听 [待实现]
+│   ├── clipboard.py             # M-08：跨平台剪贴板封装
+│   └── key_monitor.py           # M-09：全局热键监听（push-to-talk）
 ├── tests/
 │   ├── __init__.py
 │   ├── test_config.py           # 53 个测试
 │   ├── test_audio.py            # 32 个测试
-│   └── test_detector.py         # 31 个测试
+│   ├── test_detector.py         # 31 个测试
+│   ├── test_recognizer.py       # 25 个测试
+│   ├── test_typer.py            # 20 个测试
+│   ├── test_clipboard.py        # 16 个测试
+│   ├── test_manager.py          # 39 个测试
+│   ├── test_main.py             # 31 个测试
+│   └── test_key_monitor.py      # 29 个测试
 └── docs/
-    ├── specs/                   # 设计规格文档
-    │   ├── feat-config.md
-    │   ├── feat-audio.md
-    │   └── feat-detector.md
-    └── impls/                   # 实现文档
-        ├── impl-config.md
-        ├── impl-audio.md
-        └── impl-detector.md
+    ├── specs/                   # 设计规格文档（9 篇）
+    └── impls/                   # 实现文档（9 篇）
 ```
 
 ---
@@ -196,7 +196,7 @@ pip install webrtcvad-wheels>=2.0.10
 
 ## 使用说明
 
-> ⚠️ **Phase 1**（基础设施）已完成 — M-01 至 M-03 模块已实现并通过测试。完整 CLI 将在 **Phase 2** 中提供。
+> ⚠️ **全部模块已实现** — 9 个模块 276 个测试全部通过。可使用 `vtype start` 启动语音输入。需先安装依赖并下载 Whisper 模型。
 
 ### 配置验证（当前可用）
 
@@ -287,7 +287,7 @@ vtype --verbose
 
 | 参数 | 默认值 | 环境变量 | 说明 |
 |------|--------|----------|------|
-| `QUEUE_MAXSIZE` | 10 | `VTYPE_QUEUE_MAXSIZE` | 跨线程任务队列容量 |
+| `HOTKEY` | caps_lock | `VTYPE_HOTKEY` | push-to-talk 热键（pynput 格式） |
 
 ---
 
@@ -359,21 +359,23 @@ pytest tests/ --cov=. --cov-report=html
 
 **Phase 1 合计：116 个测试全部通过。**
 
-### 🔴 Phase 2 — 核心管线（下一步）
+**全部模块：9/9 完成，276 tests 全部通过。**
 
-| 模块 | 文件 | 说明 |
-|------|------|------|
-| M-04 | `core/recognizer.py` | faster-whisper int8 ASR 推理 |
-| M-05 | `core/typer.py` | 键盘模拟 + 剪贴板兜底 |
-| M-08 | `utils/clipboard.py` | 跨平台剪贴板封装 |
-| M-06 | `core/manager.py` | 核心调度器，线程生命周期管理 |
+### ✅ Phase 2 — 核心管线（已完成）
 
-### 🔴 Phase 3 — CLI 与交互
+| 模块 | 文件 | 测试 | 状态 |
+|------|------|------|------|
+| M-04 | `core/recognizer.py` | 25 ✅ | 完成 |
+| M-05 | `core/typer.py` | 20 ✅ | 完成 |
+| M-08 | `utils/clipboard.py` | 16 ✅ | 完成 |
+| M-06 | `core/manager.py` | 39 ✅ | 完成 |
 
-| 模块 | 文件 | 说明 |
-|------|------|------|
-| M-07 | `main.py` | Click CLI 入口，优雅退出 |
-| M-09 | `utils/key_monitor.py` | 全局快捷键监听（暂停/恢复） |
+### ✅ Phase 3 — CLI 与交互（已完成）
+
+| 模块 | 文件 | 测试 | 状态 |
+|------|------|------|------|
+| M-07 | `main.py` | 31 ✅ | 完成 |
+| M-09 | `utils/key_monitor.py` | 29 ✅ | 完成 |
 
 ### 🔴 Phase 4 — 打磨与发布
 
