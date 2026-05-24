@@ -142,8 +142,8 @@ def start(model_size, compute_type, language, silence_limit, hotkey, verbose, qu
             click.echo(f"  - {err}", err=True)
         sys.exit(1)
 
-    # 4. Create CoreManager with overrides
-    click.echo(f"Loading faster-whisper {kwargs.get('model_size', config.MODEL_SIZE)} model...")
+    # 4. Create CoreManager (stores config, no heavy work yet)
+    click.echo("vType initializing...")
     try:
         _manager = CoreManager(**kwargs)
     except Exception as exc:
@@ -154,10 +154,6 @@ def start(model_size, compute_type, language, silence_limit, hotkey, verbose, qu
             err=True,
         )
         sys.exit(1)
-
-    click.echo(
-        f"Model loaded (CPU, {kwargs.get('compute_type', config.COMPUTE_TYPE)})."
-    )
 
     # 5. Create callbacks
     text_cb = _create_text_callback()
@@ -353,6 +349,16 @@ def _shutdown() -> None:
     """Perform graceful shutdown of KeyMonitor and CoreManager."""
     global _manager, _monitor
 
+    # Capture statistics BEFORE stop() — stop() triggers _cleanup()
+    # which nullifies submodule references, making statistics()
+    # return zeroed-out values (e.g. detector_slices=0).
+    stats: Optional[dict] = None
+    if _manager is not None:
+        try:
+            stats = _manager.statistics
+        except Exception:
+            logger.exception("Failed to capture statistics")
+
     if _monitor is not None:
         logger.debug("Stopping KeyMonitor...")
         _monitor.stop()
@@ -361,7 +367,7 @@ def _shutdown() -> None:
         logger.debug("Stopping CoreManager...")
         _manager.stop()
 
-    _print_summary()
+    _print_summary(stats)
     _monitor = None
     _manager = None
 
@@ -398,9 +404,14 @@ def _print_welcome(
     click.echo()
 
 
-def _print_summary() -> None:
-    """Print a statistics summary after shutdown."""
-    global _manager, _started_at
+def _print_summary(stats: Optional[dict] = None) -> None:
+    """Print a statistics summary after shutdown.
+
+    Args:
+        stats: Pre-captured statistics dict from CoreManager.statistics.
+            Must be captured before stop() to avoid zeroed-out values.
+    """
+    global _started_at
 
     if _started_at == 0.0:
         return
@@ -408,17 +419,12 @@ def _print_summary() -> None:
     elapsed = time.time() - _started_at
     duration_str = _format_duration(elapsed)
 
-    # Get statistics from manager
     segments = 0
     final_status = "IDLE"
 
-    if _manager is not None:
-        try:
-            stats = _manager.statistics
-            segments = stats.get("detector_slices", 0)
-            final_status = stats.get("status", "IDLE")
-        except Exception:
-            pass
+    if stats is not None:
+        segments = stats.get("detector_slices", 0)
+        final_status = stats.get("status", "IDLE")
 
     click.echo()
     click.echo("vType stopped.")
