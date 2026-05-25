@@ -207,7 +207,7 @@ class TestStartStop:
         """If PortAudio raises, AudioCaptureError is raised."""
         with mock.patch("sounddevice.InputStream", side_effect=sd.PortAudioError("test error")):
             cap = AudioCapture()
-            with pytest.raises(AudioCaptureError, match="Failed to open audio stream"):
+            with pytest.raises(AudioCaptureError, match="打开音频流失败"):
                 cap.start()
 
 
@@ -313,7 +313,7 @@ class TestCallback:
         with caplog.at_level(logging.WARNING):
             capture._audio_callback(indata, 320, _fake_time_info(), status)
 
-        assert any("overflow" in msg.lower() for msg in caplog.text.lower().split())
+        assert any("溢出" in msg for msg in caplog.text.split())
 
 
 # ============================================================================

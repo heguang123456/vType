@@ -144,7 +144,7 @@ class TypeWriter:
                 ) from e
 
             logger.warning(
-                "pynput permission denied (%s), falling back to clipboard paste.", e
+                "pynput 权限被拒绝 (%s)，回退到剪贴板粘贴。", e
             )
             self._type_via_clipboard(text)
 
@@ -162,7 +162,7 @@ class TypeWriter:
             result_queue: Queue of recognized text strings from Recognizer.
             stop_event: Signals graceful shutdown.
         """
-        logger.info("TypeWriter consumer loop started.")
+        logger.info("打字机消费者循环已启动。")
 
         while not stop_event.is_set():
             try:
@@ -172,11 +172,11 @@ class TypeWriter:
             except queue.Empty:
                 continue
             except TypeWriterError as e:
-                logger.error("TypeWriter error: %s", e)
+                logger.error("打字机错误: %s", e)
             except Exception:
-                logger.exception("Unexpected typewriter error")
+                logger.exception("打字机发生未预期错误")
 
-        logger.info("TypeWriter consumer loop stopped.")
+        logger.info("打字机消费者循环已停止。")
 
     # ------------------------------------------------------------------
     # Private: Primary typing path (pynput)
@@ -213,8 +213,8 @@ class TypeWriter:
         """
         if self._clipboard is None:
             raise TypeWriterError(
-                "Clipboard fallback is disabled and pynput failed. "
-                "Set VTYPE_CLIPBOARD_FALLBACK=true to enable."
+                "剪贴板回退已禁用且 pynput 失败。"
+                "设置 VTYPE_CLIPBOARD_FALLBACK=true 以启用。"
             )
 
         original = self._clipboard.get_text()
@@ -225,7 +225,7 @@ class TypeWriter:
             time.sleep(0.1)  # Brief delay to let paste complete
         except Exception as e:
             raise TypeWriterError(
-                f"Clipboard paste fallback failed: {e}"
+                f"剪贴板粘贴回退失败: {e}"
             ) from e
         finally:
             # Restore original clipboard content
@@ -234,5 +234,5 @@ class TypeWriter:
                     self._clipboard.copy(original)
                 except Exception as e:
                     logger.warning(
-                        "Failed to restore original clipboard content: %s", e
+                        "恢复原始剪贴板内容失败: %s", e
                     )

@@ -79,12 +79,12 @@ def mock_vad_class():
 
 @pytest.fixture
 def detector(mock_vad_class):
-    """Create a VoiceDetector with default settings."""
+    """Create a VoiceDetector with default settings (vad mode)."""
     return VoiceDetector(
         sample_rate=16000,
         frame_duration_ms=20,
         aggressiveness=3,
-        silence_frame_limit=40,  # 800ms at 20ms/frame
+        silence_frame_limit=40,  # 800ms at 20ms/frame (old default)
     )
 
 
@@ -487,3 +487,114 @@ class TestProcessAudio:
 
         # Should have emitted at least one slice (from 5 speech + ≥3 silence)
         assert det._total_slices >= 1
+
+
+# ============================================================================
+# Push-to-Talk Mode
+# ============================================================================
+
+
+class TestPushToTalkMode:
+    """Verify push_to_talk recording mode behavior."""
+
+    def test_ptt_init(self, mock_vad_class):
+        """Push-to-talk detector initializes with correct mode."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        assert det.record_mode == "push_to_talk"
+        assert det.state.name == "LISTENING"
+
+    def test_vad_mode_default(self, mock_vad_class):
+        """Default mode is vad."""
+        det = VoiceDetector()
+        assert det.record_mode == "vad"
+
+    def test_start_recording_transitions_to_recording(self, mock_vad_class):
+        """start_recording() transitions LISTENING → RECORDING."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        det.start_recording()
+        assert det.state.name == "RECORDING"
+
+    def test_start_recording_idempotent(self, mock_vad_class):
+        """Double start_recording() is a no-op."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        det.start_recording()
+        det.start_recording()
+        assert det.state.name == "RECORDING"
+
+    def test_start_recording_warns_in_vad_mode(self, mock_vad_class):
+        """start_recording() logs warning in vad mode."""
+        det = VoiceDetector(record_mode="vad")
+        with mock.patch("core.detector.logger.warning") as mock_warn:
+            det.start_recording()
+        mock_warn.assert_called_once()
+        assert det.state.name == "LISTENING"
+
+    def test_stop_recording_emits_slice(self, mock_vad_class):
+        """stop_recording() emits buffered audio and returns to LISTENING."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        det.start_recording()
+        # Buffer some audio manually
+        det._frame_buffer = [b"x" * 640] * 5
+        tq = queue.Queue()
+        det.stop_recording(tq)
+        assert det.state.name == "LISTENING"
+        assert det._total_slices == 1
+        audio = tq.get(timeout=0.1)
+        assert isinstance(audio, np.ndarray)
+        assert audio.dtype == np.float32
+
+    def test_stop_recording_clears_buffer(self, mock_vad_class):
+        """After stop_recording(), buffer and silence count are reset."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        det.start_recording()
+        det._frame_buffer = [b"x" * 640] * 3
+        det._silence_count = 5
+        tq = queue.Queue()
+        det.stop_recording(tq)
+        assert len(det._frame_buffer) == 0
+        assert det._silence_count == 0
+
+    def test_stop_recording_warns_in_vad_mode(self, mock_vad_class):
+        """stop_recording() logs warning in vad mode."""
+        det = VoiceDetector(record_mode="vad")
+        with mock.patch("core.detector.logger.warning") as mock_warn:
+            det.stop_recording(queue.Queue())
+        mock_warn.assert_called_once()
+
+    def test_ptt_buffers_all_frames_in_recording(self, mock_vad_class):
+        """In PTT RECORDING state, all frames are buffered (no VAD filtering)."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        det.start_recording()
+        tq = queue.Queue()
+        audio = make_raw_frame(duration_ms=100)  # 5 frames
+        det._process_audio_ptt(audio, tq)
+        assert len(det._frame_buffer) == 5
+
+    def test_ptt_discards_frames_in_listening(self, mock_vad_class):
+        """In PTT LISTENING state, frames are discarded."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        tq = queue.Queue()
+        audio = make_raw_frame(duration_ms=100)  # 5 frames
+        det._process_audio_ptt(audio, tq)
+        assert len(det._frame_buffer) == 0
+
+    def test_ptt_full_cycle(self, mock_vad_class):
+        """Full PTT cycle: start → buffer → stop → emit."""
+        det = VoiceDetector(record_mode="push_to_talk")
+        tq = queue.Queue()
+
+        # Start recording
+        det.start_recording()
+        assert det.state.name == "RECORDING"
+
+        # Feed audio
+        audio = make_raw_frame(duration_ms=200)  # 10 frames
+        det._process_audio_ptt(audio, tq)
+        assert len(det._frame_buffer) == 10
+
+        # Stop recording — should emit entire buffer
+        det.stop_recording(tq)
+        assert det.state.name == "LISTENING"
+        assert det._total_slices == 1
+        result = tq.get(timeout=0.1)
+        assert len(result) == 10 * 320  # 10 frames × 320 samples

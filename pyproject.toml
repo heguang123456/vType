@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vtype"
+version = "0.1.0"
+description = "命令行语音输入法 — CLI Voice Input Tool"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "heguang"},
+]
+keywords = ["voice", "typing", "whisper", "cli", "speech-recognition"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+
+dependencies = [
+    "sounddevice>=0.4.6",
+    "webrtcvad-wheels>=2.0.10",
+    "faster-whisper>=1.0.3",
+    "pynput>=1.7.6",
+    "pyperclip>=1.8.2",
+    "click>=8.1.0",
+    "numpy>=1.24.0",
+    "zhconv>=1.4.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+    "pytest-cov>=4.1.0",
+    "pytest-timeout>=2.2.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "types-setuptools>=70.0.0",
+    "psutil>=5.9.0",
+]
+
+[project.scripts]
+vtype = "main:cli"
+
+[tool.setuptools]
+py-modules = ["config", "main"]
+packages = ["core", "utils"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 30

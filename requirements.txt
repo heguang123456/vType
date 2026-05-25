@@ -22,3 +22,6 @@ click>=8.1.0
 
 # Numerical Computing (audio data processing)
 numpy>=1.24.0
+
+# Traditional→Simplified Chinese conversion (fallback for Whisper zh output)
+zhconv>=1.4.3
