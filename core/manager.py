@@ -113,6 +113,9 @@ class CoreManager:
             "device": kwargs.get("device", config.DEVICE),
             "language": kwargs.get("language", config.LANGUAGE),
             "beam_size": kwargs.get("beam_size", config.BEAM_SIZE),
+            "initial_prompt": kwargs.get(
+                "initial_prompt", config.INITIAL_PROMPT
+            ),
             # Output
             "type_delay": kwargs.get("type_delay", config.TYPE_DELAY),
             "clipboard_fallback": kwargs.get(
@@ -120,6 +123,8 @@ class CoreManager:
             ),
             # Queue
             "queue_maxsize": kwargs.get("queue_maxsize", config.QUEUE_MAXSIZE),
+            # Recording mode
+            "record_mode": kwargs.get("record_mode", config.RECORD_MODE),
         }
 
         # Submodules (created in start())
@@ -142,7 +147,7 @@ class CoreManager:
         self._status: ManagerStatus = ManagerStatus.IDLE
 
         logger.info(
-            "CoreManager initialized: model=%s, language=%s, device=%s",
+            "核心管理器已初始化: 模型=%s, 语言=%s, 设备=%s",
             self._cfg["model_size"],
             self._cfg["language"],
             self._cfg["device"],
@@ -212,21 +217,21 @@ class CoreManager:
         """
         if self._status == ManagerStatus.RUNNING:
             logger.warning(
-                "CoreManager.start() called while already RUNNING — ignored"
+                "CoreManager.start() 在运行状态下被调用 — 已忽略"
             )
             return
 
         if self._status == ManagerStatus.PAUSED:
             logger.warning(
-                "CoreManager.start() called while PAUSED — "
-                "call resume() instead"
+                "CoreManager.start() 在暂停状态下被调用 — "
+                "请使用 resume()"
             )
             return
 
         if self._status == ManagerStatus.STOPPING:
             logger.warning(
-                "CoreManager.start() called while STOPPING — "
-                "wait for stop() to complete first"
+                "CoreManager.start() 在停止状态下被调用 — "
+                "请先等待 stop() 完成"
             )
             return
 
@@ -252,12 +257,11 @@ class CoreManager:
             self._start_threads()
 
             logger.info(
-                "CoreManager started — microphones open, "
-                "3 worker threads running"
+                "核心管理器已启动 — 麦克风已打开，3 个工作线程运行中"
             )
         except Exception:
             # Rollback: clean up partial state, re-raise
-            logger.exception("CoreManager.start() failed — rolling back")
+            logger.exception("CoreManager.start() 失败 — 正在回滚")
             self._status = ManagerStatus.IDLE
             self._cleanup()
             raise
@@ -283,7 +287,7 @@ class CoreManager:
         prev_status = self._status
         self._status = ManagerStatus.STOPPING
         logger.info(
-            "CoreManager stopping (prev_status=%s)...", prev_status.name
+            "核心管理器正在停止（先前状态=%s）...", prev_status.name
         )
 
         try:
@@ -308,14 +312,14 @@ class CoreManager:
                 try:
                     self._audio.stop()
                 except Exception:
-                    logger.exception("Error stopping AudioCapture")
+                    logger.exception("停止音频捕获时出错")
 
             # Step 6: Release all references
             self._cleanup()
 
         finally:
             self._status = ManagerStatus.IDLE
-            logger.info("CoreManager stopped")
+            logger.info("核心管理器已停止")
 
     def pause(self) -> None:
         """Pause audio capture without stopping background threads.
@@ -327,8 +331,8 @@ class CoreManager:
         """
         if self._status != ManagerStatus.RUNNING:
             logger.warning(
-                "CoreManager.pause() called while status=%s "
-                "(expected RUNNING)",
+                "CoreManager.pause() 在状态=%s 时被调用"
+                "（预期状态：运行中）",
                 self._status.name,
             )
             return
@@ -336,7 +340,7 @@ class CoreManager:
         if self._audio is not None:
             self._audio.pause()
         self._status = ManagerStatus.PAUSED
-        logger.info("CoreManager paused")
+        logger.info("核心管理器已暂停")
 
     def resume(self) -> None:
         """Resume audio capture after pause.
@@ -345,8 +349,8 @@ class CoreManager:
         """
         if self._status != ManagerStatus.PAUSED:
             logger.warning(
-                "CoreManager.resume() called while status=%s "
-                "(expected PAUSED)",
+                "CoreManager.resume() 在状态=%s 时被调用"
+                "（预期状态：暂停中）",
                 self._status.name,
             )
             return
@@ -354,7 +358,44 @@ class CoreManager:
         if self._audio is not None:
             self._audio.resume()
         self._status = ManagerStatus.RUNNING
-        logger.info("CoreManager resumed")
+        logger.info("核心管理器已恢复")
+
+    # ------------------------------------------------------------------
+    # Public API — Push-to-Talk Recording Control
+    # ------------------------------------------------------------------
+
+    def start_recording(self) -> None:
+        """Start recording in push_to_talk mode.
+
+        The manager must be in RUNNING state (threads alive, audio stream open).
+        If in IDLE state, auto-starts the full pipeline first, then starts
+        recording.
+        """
+        if self._status == ManagerStatus.IDLE:
+            # Auto-start the full pipeline if not yet running
+            self.start()
+
+        if self._status != ManagerStatus.RUNNING:
+            logger.warning(
+                "start_recording() 在状态=%s 时被调用（预期状态：运行中）",
+                self._status.name,
+            )
+            return
+
+        if self._detector is not None:
+            self._detector.start_recording()
+
+    def stop_recording(self) -> None:
+        """Stop recording in push_to_talk mode and emit buffered audio.
+
+        The detector will emit the entire buffered audio as one slice
+        to the task queue for transcription.
+        """
+        if self._status != ManagerStatus.RUNNING:
+            return
+
+        if self._detector is not None and self._task_queue is not None:
+            self._detector.stop_recording(self._task_queue)
 
     # ------------------------------------------------------------------
     # Internal: Module Creation
@@ -371,13 +412,13 @@ class CoreManager:
         3. VoiceDetector — lightweight, just webrtcvad init.
         4. TypeWriter — lightweight, optional pynput init.
         """
-        logger.info("Creating submodules...")
+        logger.info("正在创建子模块...")
 
         # 1. Recognizer (heavy: model download/loading)
         # Reuse existing model if params haven't changed (avoids 5-15s reload)
         if self._recognizer is not None and self._recognizer_matches_cfg():
             logger.info(
-                "Reusing existing WhisperModel (same model_size=%s, language=%s)",
+                "复用现有的 Whisper 模型（模型尺寸=%s, 语言=%s）",
                 self._cfg["model_size"],
                 self._cfg["language"],
             )
@@ -388,6 +429,7 @@ class CoreManager:
                 device=self._cfg["device"],
                 language=self._cfg["language"],
                 beam_size=self._cfg["beam_size"],
+                initial_prompt=self._cfg["initial_prompt"],
             )
 
         # 2. AudioCapture (validates microphone availability)
@@ -405,6 +447,7 @@ class CoreManager:
             frame_duration_ms=self._cfg["frame_duration_ms"],
             aggressiveness=self._cfg["vad_aggressiveness"],
             silence_frame_limit=self._cfg["silence_frame_limit"],
+            record_mode=self._cfg["record_mode"],
         )
 
         # 4. TypeWriter (keyboard output engine)
@@ -413,7 +456,7 @@ class CoreManager:
             clipboard_fallback=self._cfg["clipboard_fallback"],
         )
 
-        logger.info("All 4 submodules created")
+        logger.info("全部 4 个子模块已创建")
 
     # ------------------------------------------------------------------
     # Internal: Recognizer Cache
@@ -435,6 +478,7 @@ class CoreManager:
         return (
             self._recognizer.model_size == self._cfg["model_size"]
             and self._recognizer.language == self._cfg["language"]
+            and self._recognizer.initial_prompt == self._cfg["initial_prompt"]
         )
 
     # ------------------------------------------------------------------
@@ -451,7 +495,7 @@ class CoreManager:
 
         All threads are daemon=True so they won't block process exit.
         """
-        logger.info("Starting worker threads...")
+        logger.info("正在启动工作线程...")
 
         # Thread A: VoiceDetector — raw_queue → task_queue
         self._detector_thread = threading.Thread(
@@ -485,8 +529,8 @@ class CoreManager:
         self._typer_thread.start()
 
         logger.info(
-            "Worker threads started: Detector=%s, Recognizer=%s, "
-            "TypeWriter=%s",
+            "工作线程已启动: 检测器=%s, 识别器=%s, "
+            "打字机=%s",
             self._detector_thread.ident,
             self._recognizer_thread.ident,
             self._typer_thread.ident,
@@ -516,12 +560,12 @@ class CoreManager:
         thread.join(timeout=timeout)
         if thread.is_alive():
             logger.warning(
-                "%s thread did not exit within %.1fs (continuing shutdown)",
+                "%s 线程在 %.1f 秒内未退出（继续关闭）",
                 name,
                 timeout,
             )
         else:
-            logger.debug("%s thread stopped", name)
+            logger.debug("%s 线程已停止", name)
 
     # ------------------------------------------------------------------
     # Internal: Cleanup

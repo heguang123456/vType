@@ -155,7 +155,7 @@ class KeyMonitor:
         self._pressed_keys: set = set()
 
         logger.info(
-            "KeyMonitor initialized: hotkey=%s",
+            "快捷键监听器已初始化: 快捷键=%s",
             self._hotkey,
         )
 
@@ -188,7 +188,7 @@ class KeyMonitor:
         with self._lock:
             if self._state == KeyMonitorState.LISTENING:
                 logger.warning(
-                    "KeyMonitor.start() called while already LISTENING"
+                    "KeyMonitor.start() 已在监听状态下被调用"
                 )
                 return
             self._state = KeyMonitorState.LISTENING
@@ -214,7 +214,7 @@ class KeyMonitor:
         )
         self._listener_thread.start()
 
-        logger.info("KeyMonitor started (hotkey=%s)", self._hotkey)
+        logger.info("快捷键监听器已启动（快捷键=%s）", self._hotkey)
 
     def stop(self) -> None:
         """Stop the keyboard listener and join the background thread.
@@ -236,13 +236,13 @@ class KeyMonitor:
             if self._listener_thread is not None:
                 self._listener_thread.join(timeout=2.0)
                 if self._listener_thread.is_alive():
-                    logger.warning("KeyMonitor listener thread did not exit within 2s")
+                    logger.warning("快捷键监听器线程在 2 秒内未退出")
         except Exception:
-            logger.exception("Error during KeyMonitor.stop()")
+            logger.exception("KeyMonitor.stop() 执行出错")
 
         self._listener = None
         self._listener_thread = None
-        logger.info("KeyMonitor stopped")
+        logger.info("快捷键监听器已停止")
 
     # ------------------------------------------------------------------
     # Context Manager
@@ -293,7 +293,7 @@ class KeyMonitor:
                 if key_obj is not None:
                     self._combo_keys.add(key_obj)
                 else:
-                    logger.warning("Unknown combo key: %s", part)
+                    logger.warning("未知组合键: %s", part)
             else:
                 # Regular character: 'v', '1', etc.
                 if len(part) == 1:
@@ -304,11 +304,11 @@ class KeyMonitor:
                     if key_obj is not None:
                         self._combo_keys.add(key_obj)
                     else:
-                        logger.warning("Unknown combo key: %s", part)
+                        logger.warning("未知组合键: %s", part)
 
         if not self._combo_keys:
             logger.warning(
-                "Failed to parse any keys from hotkey string: %s",
+                "无法从快捷键字符串中解析任何按键: %s",
                 self._hotkey,
             )
             self._hotkey_is_combo = False
@@ -452,11 +452,11 @@ class KeyMonitor:
             return  # Already recording (debounce)
 
         self._is_recording = True
-        logger.debug("Hotkey pressed → triggering on_press callback")
+        logger.debug("快捷键按下 → 触发 on_press 回调")
         try:
             self._on_press_cb()
         except Exception:
-            logger.exception("Error in on_press callback")
+            logger.exception("on_press 回调出错")
 
     def _trigger_release(self) -> None:
         """Trigger the on_release callback with debounce protection."""
@@ -464,11 +464,11 @@ class KeyMonitor:
             return  # Not recording (already released or debounce)
 
         self._is_recording = False
-        logger.debug("Hotkey released → triggering on_release callback")
+        logger.debug("快捷键释放 → 触发 on_release 回调")
         try:
             self._on_release_cb()
         except Exception:
-            logger.exception("Error in on_release callback")
+            logger.exception("on_release 回调出错")
 
     # ------------------------------------------------------------------
     # Internal: Error Handling
@@ -489,20 +489,19 @@ class KeyMonitor:
             or "trusted" in error_msg
         ):
             logger.warning(
-                "KeyMonitor: macOS Accessibility permission not granted.\n"
+                "KeyMonitor: macOS 辅助功能权限未授予。\n"
                 "\n"
-                "  Authorisation steps:\n"
-                "  1. Open System Settings → Privacy & Security "
-                "→ Accessibility\n"
-                "  2. Click + and add your terminal app "
+                "  授权步骤:\n"
+                "  1. 打开 系统设置 → 隐私与安全性 → 辅助功能\n"
+                "  2. 点击 + 添加你的终端应用 "
                 "(Terminal.app / iTerm.app)\n"
-                "  3. Make sure the toggle is ON\n"
-                "  4. Restart vType\n"
+                "  3. 确保开关为 ON\n"
+                "  4. 重启 vType\n"
                 "\n"
-                "  Running in hotkey-disabled mode. Use Ctrl+C to control."
+                "  正在以禁用快捷键模式运行。使用 Ctrl+C 控制。"
             )
             # Don't raise — allow degraded operation
         else:
             logger.error(
-                "Failed to create keyboard listener: %s", exc
+                "创建键盘监听器失败: %s", exc
             )

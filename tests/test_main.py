@@ -38,10 +38,12 @@ def clean_globals():
     main_module._manager = None
     main_module._monitor = None
     main_module._started_at = 0.0
+    main_module._record_mode = None
     yield
     main_module._manager = None
     main_module._monitor = None
     main_module._started_at = 0.0
+    main_module._record_mode = None
 
 
 @pytest.fixture
@@ -182,7 +184,7 @@ class TestDevicesCommand:
         ]
         result = runner.invoke(main_module.devices)
         assert result.exit_code == 0
-        assert "No input devices" in result.output
+        assert "未找到输入设备" in result.output
 
 
 # ============================================================================
@@ -274,7 +276,7 @@ class TestErrorHandling:
             mock_mgr.side_effect = RuntimeError("Model download failed")
             result = runner.invoke(main_module.start, [])
         assert result.exit_code == 1
-        assert "Failed to initialize" in result.output
+        assert "初始化核心管理器失败" in result.output
 
     def test_config_validation_errors(self, runner, monkeypatch):
         """Invalid config prints errors and exits."""
@@ -287,7 +289,7 @@ class TestErrorHandling:
         with mock.patch.object(cfg, "validate_config", return_value=["CHANNELS must be 1"]):
             result = runner.invoke(main_module.start, [])
         assert result.exit_code == 1
-        assert "Configuration errors" in result.output
+        assert "检测到配置错误" in result.output
 
 
 # ============================================================================
@@ -342,14 +344,14 @@ class TestDisplayHelpers:
         """Welcome banner shows model and language info."""
         with mock.patch("sys.stdout", new_callable=mock.MagicMock):
             with mock.patch("click.echo") as mock_echo:
-                main_module._print_welcome("base", "int8", "zh", 800, None)
+                main_module._print_welcome("base", "int8", "zh", 1500, "vad", None)
                 all_output = " ".join(
                     str(call.args[0]) if call.args else ""
                     for call in mock_echo.call_args_list
                 )
         assert "base" in all_output
         assert "zh" in all_output
-        assert "800ms" in all_output
+        assert "1500ms" in all_output
 
     def test_print_summary_with_no_manager(self):
         """Summary print handles missing manager gracefully."""
@@ -430,3 +432,41 @@ class TestHotkeyCallbacks:
         mock_mgr.stop.side_effect = RuntimeError("Boom!")
         main_module._manager = mock_mgr
         main_module._on_hotkey_release()  # Should not raise
+
+
+class TestHotkeyCallbacksPushToTalk:
+    """Hotkey callbacks in push_to_talk mode."""
+
+    def test_press_calls_start_recording_in_ptt(self):
+        """Hotkey press calls start_recording() instead of start() in PTT mode."""
+        mock_mgr = mock.MagicMock()
+        main_module._manager = mock_mgr
+        main_module._record_mode = "push_to_talk"
+        main_module._on_hotkey_press()
+        mock_mgr.start_recording.assert_called_once()
+        mock_mgr.start.assert_not_called()
+
+    def test_release_calls_stop_recording_in_ptt(self):
+        """Hotkey release calls stop_recording() instead of stop() in PTT mode."""
+        mock_mgr = mock.MagicMock()
+        main_module._manager = mock_mgr
+        main_module._record_mode = "push_to_talk"
+        main_module._on_hotkey_release()
+        mock_mgr.stop_recording.assert_called_once()
+        mock_mgr.stop.assert_not_called()
+
+    def test_press_calls_start_in_vad_mode(self):
+        """Hotkey press calls start() in vad mode."""
+        mock_mgr = mock.MagicMock()
+        main_module._manager = mock_mgr
+        main_module._record_mode = "vad"
+        main_module._on_hotkey_press()
+        mock_mgr.start.assert_called_once()
+
+    def test_release_calls_stop_in_vad_mode(self):
+        """Hotkey release calls stop() in vad mode."""
+        mock_mgr = mock.MagicMock()
+        main_module._manager = mock_mgr
+        main_module._record_mode = "vad"
+        main_module._on_hotkey_release()
+        mock_mgr.stop.assert_called_once()

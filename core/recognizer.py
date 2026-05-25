@@ -6,8 +6,8 @@ the detector into text. Designed for CPU inference with int8 quantization.
 
 Data Flow:
     task_queue (np.ndarray float32) → Recognizer.transcribe()
-    → WhisperModel.transcribe(language, beam_size, vad_filter=False)
-    → segments → merged text → result_queue (str)
+    → WhisperModel.transcribe(language, beam_size, initial_prompt, vad_filter=False)
+    → segments → merged text → zhconv T2S fallback → result_queue (str)
 
 The model is loaded once in __init__ (heavy, 5-15s) and reused for all
 subsequent transcribe() calls.
@@ -23,6 +23,11 @@ try:
     from faster_whisper import WhisperModel
 except ImportError:
     WhisperModel = None  # type: ignore[assignment]
+
+try:
+    from zhconv import convert as _zhconv_convert
+except ImportError:
+    _zhconv_convert = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +76,7 @@ class Recognizer:
         device: str = "cpu",
         language: str = "zh",
         beam_size: int = 3,
+        initial_prompt: str = "以下是普通话的句子。",
     ) -> None:
         """Load the WhisperModel. Heavy operation, done once.
 
@@ -80,6 +86,8 @@ class Recognizer:
             device: Inference device (cpu/cuda).
             language: Recognition language (zh/en/auto).
             beam_size: Beam search width (1-10).
+            initial_prompt: Prompt to guide output style. Use Simplified Chinese
+                text to prevent the model from defaulting to Traditional Chinese.
 
         Raises:
             ModelNotFoundError: If faster-whisper is not installed.
@@ -98,9 +106,10 @@ class Recognizer:
         self._device = device
         self._language = language
         self._beam_size = beam_size
+        self._initial_prompt = initial_prompt
 
         logger.info(
-            "Loading WhisperModel: size=%s, compute=%s, device=%s...",
+            "正在加载 Whisper 模型: 尺寸=%s, 计算类型=%s, 设备=%s...",
             model_size,
             compute_type,
             device,
@@ -121,7 +130,7 @@ class Recognizer:
             ) from e
 
         logger.info(
-            "WhisperModel loaded successfully: size=%s, compute=%s, device=%s",
+            "Whisper 模型加载成功: 尺寸=%s, 计算类型=%s, 设备=%s",
             model_size,
             compute_type,
             device,
@@ -140,6 +149,11 @@ class Recognizer:
     def language(self) -> str:
         """Return the configured recognition language."""
         return self._language
+
+    @property
+    def initial_prompt(self) -> str:
+        """Return the configured initial prompt."""
+        return self._initial_prompt
 
     def transcribe(self, audio: np.ndarray) -> str:
         """Transcribe a float32 audio array to text.
@@ -167,17 +181,19 @@ class Recognizer:
             audio = audio.flatten()
 
         logger.debug(
-            "Transcribing audio: %d samples (%.2f seconds)",
+            "正在转录音频: %d 采样 (%.2f 秒)",
             len(audio),
             len(audio) / 16000.0,
         )
 
         # Perform inference
         # vad_filter=False because detector.py already handles VAD
+        # initial_prompt guides Whisper to output Simplified Chinese instead of Traditional
         segments, info = self._model.transcribe(
             audio,
             language=self._language,
             beam_size=self._beam_size,
+            initial_prompt=self._initial_prompt,
             vad_filter=False,
         )
 
@@ -185,8 +201,14 @@ class Recognizer:
         texts = [seg.text for seg in segments]
         result = "".join(texts).strip()
 
+        # Fallback: convert Traditional Chinese to Simplified Chinese
+        # zhconv handles the rare cases where initial_prompt alone
+        # doesn't fully prevent Traditional output
+        if result and self._language == "zh" and _zhconv_convert is not None:
+            result = _zhconv_convert(result, "zh-cn")
+
         logger.debug(
-            "Transcription result (%d segments, lang=%s): %r",
+            "转录结果 (%d 片段, 语言=%s): %r",
             len(texts),
             info.language,
             result,
@@ -210,7 +232,7 @@ class Recognizer:
             result_queue: Queue to push recognized text strings.
             stop_event: Signals graceful shutdown.
         """
-        logger.info("Recognizer loop started")
+        logger.info("识别器循环已启动")
 
         while not stop_event.is_set():
             try:
@@ -225,12 +247,12 @@ class Recognizer:
                         result_queue.put(text, timeout=1.0)
                     except queue.Full:
                         logger.warning(
-                            "Result queue full, dropping: %r", text[:50]
+                            "结果队列已满，丢弃: %r", text[:50]
                         )
             except Exception:
                 logger.exception(
-                    "Unexpected error during transcription"
+                    "转录过程中发生意外错误"
                 )
                 # Continue processing — don't crash the consumer loop
 
-        logger.info("Recognizer loop stopped")
+        logger.info("识别器循环已停止")

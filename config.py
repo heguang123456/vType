@@ -103,8 +103,9 @@ VAD_AGGRESSIVENESS: Final[int] = _env_int("VTYPE_VAD_AGGRESSIVENESS", 3)
 # Silence Detection & Slicing Parameters
 # ============================================================================
 
-SILENCE_LIMIT_MS: Final[int] = _env_int("VTYPE_SILENCE_LIMIT_MS", 800)
-"""Consecutive silence duration (ms) before slicing and sending to ASR."""
+SILENCE_LIMIT_MS: Final[int] = _env_int("VTYPE_SILENCE_LIMIT_MS", 1500)
+"""Consecutive silence duration (ms) before slicing and sending to ASR.
+Default 1500ms (was 800ms) to reduce fragmentation from natural pauses."""
 
 SILENCE_FRAME_LIMIT: Final[int] = SILENCE_LIMIT_MS // FRAME_DURATION_MS
 """Derived: number of consecutive silent frames before slicing.
@@ -134,9 +135,22 @@ BEAM_SIZE: Final[int] = _env_int("VTYPE_BEAM_SIZE", 3)
 LANGUAGE: Final[str] = _env_str("VTYPE_LANGUAGE", "zh")
 """Recognition language. 'zh' for Chinese, 'auto' for auto-detection."""
 
+INITIAL_PROMPT: Final[str] = _env_str("VTYPE_INITIAL_PROMPT", "以下是普通话的句子。")
+"""Initial prompt to guide Whisper output style. Default uses Simplified Chinese
+to prevent the model from defaulting to Traditional Chinese when language='zh'.
+Set to empty string to disable."""
+
 
 # ============================================================================
-# Keyboard Output Parameters
+# Recording Mode
+# ============================================================================
+
+RECORD_MODE: Final[str] = _env_str("VTYPE_RECORD_MODE", "vad")
+"""Recording mode: 'vad' or 'push_to_talk'.
+- 'vad': Voice Activity Detection auto-slicing (default). Slices audio on
+  sustained silence (SILENCE_LIMIT_MS). Improved with higher threshold (1500ms).
+- 'push_to_talk': Hold hotkey to record, release to transcribe. Entire recording
+  session is sent as a single segment for maximum accuracy."""
 # ============================================================================
 
 TYPE_DELAY: Final[float] = _env_float("VTYPE_TYPE_DELAY", 0.005)
@@ -218,6 +232,9 @@ def validate_config() -> List[str]:
     if QUEUE_MAXSIZE < 1:
         errors.append(f"QUEUE_MAXSIZE={QUEUE_MAXSIZE}; must be >= 1")
 
+    if RECORD_MODE not in ("vad", "push_to_talk"):
+        errors.append(f"RECORD_MODE='{RECORD_MODE}'; must be 'vad' or 'push_to_talk'")
+
     return errors
 
 
@@ -250,6 +267,7 @@ def print_config() -> None:
 ║    DEVICE              = {DEVICE:>6}                                ║
 ║    BEAM_SIZE           = {BEAM_SIZE:>6}                                  ║
 ║    LANGUAGE            = {LANGUAGE:>6}                                ║
+║    INITIAL_PROMPT      = {INITIAL_PROMPT:>6}                                ║
 ╠══════════════════════════════════════════════════════════╣
 ║  Keyboard Output:                                         ║
 ║    TYPE_DELAY          = {TYPE_DELAY:>6} s                               ║
@@ -257,6 +275,9 @@ def print_config() -> None:
 ╠══════════════════════════════════════════════════════════╣
 ║  Queue & Threading:                                       ║
 ║    QUEUE_MAXSIZE       = {QUEUE_MAXSIZE:>6}                                  ║
+╠══════════════════════════════════════════════════════════╣
+║  Recording Mode:                                          ║
+║    RECORD_MODE         = {RECORD_MODE:>6}                                ║
 ╠══════════════════════════════════════════════════════════╣
 ║  Validation: {status:<44}║
 ╚══════════════════════════════════════════════════════════╝
@@ -287,7 +308,9 @@ def get_config_dict() -> Dict[str, Any]:
         "device": DEVICE,
         "beam_size": BEAM_SIZE,
         "language": LANGUAGE,
+        "initial_prompt": INITIAL_PROMPT,
         "type_delay": TYPE_DELAY,
         "clipboard_fallback": CLIPBOARD_FALLBACK,
         "queue_maxsize": QUEUE_MAXSIZE,
+        "record_mode": RECORD_MODE,
     }

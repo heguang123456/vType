@@ -40,10 +40,12 @@ def _create_mock_submodules():
     mock_detector.state = mock.MagicMock()
     mock_detector.state.name = "LISTENING"
     mock_detector.total_slices = 0
+    mock_detector.record_mode = "vad"
 
     mock_recognizer = mock.MagicMock()
     mock_recognizer.model_size = "base"
     mock_recognizer.language = "zh"
+    mock_recognizer.initial_prompt = "以下是普通话的句子。"
     mock_typer = mock.MagicMock()
 
     return {
@@ -672,6 +674,7 @@ class TestRecognizerReuse:
             mc_audio.return_value.raw_queue = queue.Queue()
             mc_recognizer.return_value.model_size = "base"
             mc_recognizer.return_value.language = "zh"
+            mc_recognizer.return_value.initial_prompt = "以下是普通话的句子。"
 
             mgr = CoreManager(model_size="base")
             mgr.start()
@@ -683,3 +686,52 @@ class TestRecognizerReuse:
             mgr2 = CoreManager(model_size="large")
             mgr2.start()
             assert mc_recognizer.call_count == 2  # new instance → new Recognizer
+
+
+# ============================================================================
+# Test: Push-to-Talk Recording Control
+# ============================================================================
+
+
+class TestPushToTalk:
+    """CoreManager.start_recording / stop_recording for push_to_talk mode."""
+
+    def test_start_recording_auto_starts_when_idle(self, mock_modules, mock_thread):
+        """start_recording() auto-starts the full pipeline if IDLE."""
+        mgr = CoreManager(record_mode="push_to_talk")
+        assert mgr.status == ManagerStatus.IDLE
+
+        mgr.start_recording()
+        assert mgr.status == ManagerStatus.RUNNING
+        # After auto-start, detector.start_recording() is called separately
+        # (detector is recreated by start(), so check post-start call)
+        mock_modules["detector"].start_recording.assert_called_once()
+
+    def test_start_recording_calls_detector_when_running(self, mock_modules, mock_thread):
+        """start_recording() delegates to detector.start_recording() when RUNNING."""
+        mgr = CoreManager(record_mode="push_to_talk")
+        mgr.start()  # full start
+        mock_modules["detector"].start_recording.reset_mock()
+
+        mgr.start_recording()
+        mock_modules["detector"].start_recording.assert_called_once()
+
+    def test_stop_recording_calls_detector(self, mock_modules, mock_thread):
+        """stop_recording() delegates to detector.stop_recording() with task_queue."""
+        mgr = CoreManager(record_mode="push_to_talk")
+        mgr.start()
+
+        mgr.stop_recording()
+        mock_modules["detector"].stop_recording.assert_called_once_with(mgr._task_queue)
+
+    def test_stop_recording_noop_when_idle(self, manager):
+        """stop_recording() is a no-op when manager is IDLE."""
+        manager.stop_recording()  # Should not raise
+
+    def test_record_mode_passed_to_detector(self, mock_modules, mock_thread):
+        """record_mode='push_to_talk' is forwarded to VoiceDetector."""
+        mock_modules["VoiceDetector"].reset_mock()
+        mgr = CoreManager(record_mode="push_to_talk")
+        mgr.start()
+        call_kwargs = mock_modules["VoiceDetector"].call_args[1]
+        assert call_kwargs["record_mode"] == "push_to_talk"

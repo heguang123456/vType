@@ -18,7 +18,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from core.recognizer import ModelNotFoundError, Recognizer
+from core.recognizer import ModelNotFoundError, Recognizer, _zhconv_convert
 
 
 # ============================================================================
@@ -74,10 +74,10 @@ class MockWhisperModel:
         self._language = lang
         self._language_prob = prob
 
-    def transcribe(self, audio, language=None, beam_size=None, vad_filter=None):
+    def transcribe(self, audio, language=None, beam_size=None, initial_prompt=None, vad_filter=None):
         """Record call and return controlled segments."""
         self.transcribe_called_with.append(
-            (audio.copy() if isinstance(audio, np.ndarray) else audio, language, beam_size, vad_filter)
+            (audio.copy() if isinstance(audio, np.ndarray) else audio, language, beam_size, initial_prompt, vad_filter)
         )
         segments = [mock.MagicMock(text=s.text, start=s.start, end=s.end) for s in self._segments]
         info = mock.MagicMock(
@@ -134,6 +134,7 @@ class TestInit:
         rec = Recognizer()
         assert rec.model_size == "base"
         assert rec.language == "zh"
+        assert rec.initial_prompt == "以下是普通话的句子。"
 
     def test_custom_parameters(self, mock_whisper):
         rec = Recognizer(
@@ -142,9 +143,11 @@ class TestInit:
             device="cpu",
             language="en",
             beam_size=5,
+            initial_prompt="Custom prompt.",
         )
         assert rec.model_size == "small"
         assert rec.language == "en"
+        assert rec.initial_prompt == "Custom prompt."
 
     def test_model_is_loaded_on_init(self, mock_whisper):
         rec = Recognizer(model_size="base")
@@ -223,10 +226,75 @@ class TestTranscribe:
 
         called = recognizer._model.transcribe_called_with
         assert len(called) == 1
-        _, lang, beam, vad = called[0]
+        _, lang, beam, prompt, vad = called[0]
         assert lang == "zh"
         assert beam == 3
+        assert prompt == "以下是普通话的句子。"
         assert vad is False
+
+
+# ============================================================================
+# Simplified Chinese Fallback
+# ============================================================================
+
+
+class TestSimplifiedChineseFallback:
+    """Verify Traditional Chinese → Simplified Chinese conversion."""
+
+    @pytest.mark.skipif(
+        _zhconv_convert is None,
+        reason="zhconv not installed",
+    )
+    def test_traditional_converted_to_simplified(self, recognizer):
+        """zhconv should convert 繁體 → 繁体 etc."""
+        recognizer._model.set_segments([
+            MockSegment(text="這是繁體字測試"),
+        ])
+        result = recognizer.transcribe(make_audio())
+        # Result should be Simplified Chinese
+        assert result == "这是繁体字测试"
+
+    @pytest.mark.skipif(
+        _zhconv_convert is None,
+        reason="zhconv not installed",
+    )
+    def test_already_simplified_unchanged(self, recognizer):
+        """Already-simplified text should pass through unchanged."""
+        recognizer._model.set_segments([
+            MockSegment(text="这是简体字测试"),
+        ])
+        result = recognizer.transcribe(make_audio())
+        assert result == "这是简体字测试"
+
+    def test_no_conversion_for_english(self, mock_whisper):
+        """Non-Chinese language should skip zhconv conversion."""
+        rec = Recognizer(language="en", initial_prompt="")
+        rec._model.set_segments([
+            MockSegment(text="Hello world"),
+        ])
+        with mock.patch("core.recognizer._zhconv_convert", side_effect=AssertionError("should not be called")):
+            result = rec.transcribe(make_audio())
+        assert result == "Hello world"
+
+    def test_zhconv_not_installed(self, mock_whisper):
+        """If zhconv is missing, text should still be returned as-is."""
+        with mock.patch("core.recognizer._zhconv_convert", None):
+            rec = Recognizer()
+            rec._model.set_segments([
+                MockSegment(text="這是繁體字"),
+            ])
+            result = rec.transcribe(make_audio())
+        # Without zhconv, Traditional Chinese passes through unchanged
+        assert result == "這是繁體字"
+
+    def test_empty_prompt_disables_prompt(self, mock_whisper):
+        """Empty initial_prompt should be passed as empty string."""
+        rec = Recognizer(initial_prompt="")
+        assert rec.initial_prompt == ""
+        rec._model.set_segments([MockSegment(text="test")])
+        rec.transcribe(make_audio())
+        _, _, _, prompt, _ = rec._model.transcribe_called_with[0]
+        assert prompt == ""
 
 
 # ============================================================================
@@ -410,12 +478,14 @@ class TestConfigIntegration:
             device=config.DEVICE,
             language=config.LANGUAGE,
             beam_size=config.BEAM_SIZE,
+            initial_prompt=config.INITIAL_PROMPT,
         )
         assert rec._model_size == "base"
         assert rec._compute_type == "int8"
         assert rec._device == "cpu"
         assert rec._language == "zh"
         assert rec._beam_size == 3
+        assert rec._initial_prompt == "以下是普通话的句子。"
 
     def test_override_config_values(self, mock_whisper):
         rec = Recognizer(

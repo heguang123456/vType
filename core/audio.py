@@ -115,8 +115,8 @@ class AudioCapture:
                 raise DeviceNotFoundError(f"Device {device_id} not found: {e}") from e
 
         logger.info(
-            "AudioCapture initialized: sample_rate=%d, channels=%d, "
-            "block_size=%d, dtype=%s, device_id=%s",
+            "音频捕获已初始化: 采样率=%d, 声道=%d, "
+            "块大小=%d, 数据类型=%s, 设备ID=%s",
             sample_rate,
             channels,
             block_size,
@@ -148,7 +148,7 @@ class AudioCapture:
             AudioCaptureError: If the stream fails to open.
         """
         if self._is_running.is_set():
-            logger.warning("AudioCapture.start() called while already running")
+            logger.warning("AudioCapture.start() 已在运行状态下被调用")
             return
 
         try:
@@ -163,11 +163,11 @@ class AudioCapture:
             self._stream.start()
             self._is_running.set()
             self._is_paused.clear()
-            logger.info("Audio stream started successfully")
+            logger.info("音频流启动成功")
         except sd.PortAudioError as e:
             raise AudioCaptureError(
-                f"Failed to open audio stream: {e}. "
-                f"Please check your microphone settings and permissions."
+                f"打开音频流失败: {e}。"
+                f"请检查麦克风设置和权限。"
             ) from e
 
     def stop(self) -> None:
@@ -183,7 +183,7 @@ class AudioCapture:
         if not self._is_running.is_set():
             return
 
-        logger.info("Stopping audio stream...")
+        logger.info("正在停止音频流...")
         # Signal callback to stop accepting new data
         self._is_running.clear()
         self._is_paused.clear()
@@ -194,14 +194,14 @@ class AudioCapture:
                 self._stream.stop()
                 self._stream.close()
             except sd.PortAudioError as e:
-                logger.warning("Error during stream stop/close: %s", e)
+                logger.warning("流停止/关闭时出错: %s", e)
             finally:
                 self._stream = None
 
         # Drain the raw queue so detector thread can exit cleanly
         self._drain_queue()
 
-        logger.info("Audio stream stopped")
+        logger.info("音频流已停止")
 
     def pause(self) -> None:
         """Pause audio capture without closing the stream.
@@ -210,18 +210,18 @@ class AudioCapture:
         Use resume() to continue capture.
         """
         if not self._is_running.is_set():
-            logger.warning("AudioCapture.pause() called while not running")
+            logger.warning("AudioCapture.pause() 在未运行状态下被调用")
             return
         self._is_paused.set()
-        logger.info("Audio capture paused")
+        logger.info("音频捕获已暂停")
 
     def resume(self) -> None:
         """Resume audio capture after pause."""
         if not self._is_running.is_set():
-            logger.warning("AudioCapture.resume() called while not running")
+            logger.warning("AudioCapture.resume() 在未运行状态下被调用")
             return
         self._is_paused.clear()
-        logger.info("Audio capture resumed")
+        logger.info("音频捕获已恢复")
 
     @staticmethod
     def list_devices() -> List[Dict[str, Any]]:
@@ -235,7 +235,7 @@ class AudioCapture:
             all_devices = sd.query_devices()
             default_input = sd.default.device[0]  # default input device ID
         except sd.PortAudioError as e:
-            logger.error("Failed to query audio devices: %s", e)
+            logger.error("查询音频设备失败: %s", e)
             return devices
 
         for i, dev in enumerate(all_devices):
@@ -279,9 +279,9 @@ class AudioCapture:
         # Check for hardware issues
         if status:
             if status.input_overflow:
-                logger.warning("Audio input overflow — frames were dropped!")
+                logger.warning("音频输入溢出 — 帧已丢弃！")
             if status.input_underflow:
-                logger.warning("Audio input underflow")
+                logger.warning("音频输入下溢")
 
         # Graceful stop signal from stop()
         if not self._is_running.is_set():
@@ -298,7 +298,7 @@ class AudioCapture:
         except queue.Full:
             # Queue is full — detector thread is falling behind
             # Drop this frame rather than blocking the audio callback
-            logger.warning("Raw audio queue is full, dropping frame")
+            logger.warning("原始音频队列已满，丢弃帧")
 
     def _drain_queue(self) -> None:
         """Drain remaining frames from raw_queue after stop.
@@ -314,4 +314,4 @@ class AudioCapture:
             except queue.Empty:
                 break
         if drained > 0:
-            logger.debug("Drained %d frames from raw queue", drained)
+            logger.debug("从原始队列中清除了 %d 帧", drained)

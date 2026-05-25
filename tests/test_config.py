@@ -107,11 +107,11 @@ class TestDefaultValues:
 
     def test_silence_limit_ms_default(self):
         config = _reload_config()
-        assert config.SILENCE_LIMIT_MS == 800
+        assert config.SILENCE_LIMIT_MS == 1500
 
     def test_silence_frame_limit_default(self):
         config = _reload_config()
-        assert config.SILENCE_FRAME_LIMIT == 40  # 800 // 20
+        assert config.SILENCE_FRAME_LIMIT == 75  # 1500 // 20
 
     def test_model_size_default(self):
         config = _reload_config()
@@ -133,6 +133,10 @@ class TestDefaultValues:
         config = _reload_config()
         assert config.LANGUAGE == "zh"
 
+    def test_initial_prompt_default(self):
+        config = _reload_config()
+        assert config.INITIAL_PROMPT == "以下是普通话的句子。"
+
     def test_type_delay_default(self):
         config = _reload_config()
         assert config.TYPE_DELAY == 0.005
@@ -144,6 +148,10 @@ class TestDefaultValues:
     def test_queue_maxsize_default(self):
         config = _reload_config()
         assert config.QUEUE_MAXSIZE == 10
+
+    def test_record_mode_default(self):
+        config = _reload_config()
+        assert config.RECORD_MODE == "vad"
 
 
 # ============================================================================
@@ -204,6 +212,16 @@ class TestEnvOverride:
         config = _reload_config()
         assert config.LANGUAGE == "en"
 
+    def test_override_initial_prompt(self):
+        os.environ["VTYPE_INITIAL_PROMPT"] = "Custom prompt."
+        config = _reload_config()
+        assert config.INITIAL_PROMPT == "Custom prompt."
+
+    def test_disable_initial_prompt(self):
+        os.environ["VTYPE_INITIAL_PROMPT"] = ""
+        config = _reload_config()
+        assert config.INITIAL_PROMPT == ""
+
     def test_override_compute_type(self):
         os.environ["VTYPE_COMPUTE_TYPE"] = "float16"
         config = _reload_config()
@@ -223,6 +241,11 @@ class TestEnvOverride:
         os.environ["VTYPE_QUEUE_MAXSIZE"] = "20"
         config = _reload_config()
         assert config.QUEUE_MAXSIZE == 20
+
+    def test_override_record_mode(self):
+        os.environ["VTYPE_RECORD_MODE"] = "push_to_talk"
+        config = _reload_config()
+        assert config.RECORD_MODE == "push_to_talk"
 
 
 # ============================================================================
@@ -345,6 +368,12 @@ class TestValidate:
         errors = config.validate_config()
         assert any("BLOCK_SIZE" in e for e in errors)
 
+    def test_invalid_record_mode(self):
+        os.environ["VTYPE_RECORD_MODE"] = "tap"
+        config = _reload_config()
+        errors = config.validate_config()
+        assert any("RECORD_MODE" in e for e in errors)
+
 
 # ============================================================================
 # Helper Functions
@@ -368,7 +397,9 @@ class TestGetConfigDict:
             "frame_duration_ms", "vad_aggressiveness",
             "silence_limit_ms", "silence_frame_limit",
             "model_size", "compute_type", "device", "beam_size", "language",
+            "initial_prompt",
             "type_delay", "clipboard_fallback", "queue_maxsize",
+            "record_mode",
         ]
         for key in expected_keys:
             assert key in d, f"Missing key: {key}"
