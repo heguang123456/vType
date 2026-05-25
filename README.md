@@ -102,7 +102,24 @@
 | 剪贴板兜底 | `pyperclip` | 跨平台剪贴板访问 |
 | CLI 框架 | `click` | 命令行参数解析 |
 | 测试框架 | `pytest` + `pytest-mock` | 单元测试与 mock 支持 |
+| 繁简转换 | `zhconv` | 繁体中文 → 简体中文后处理 |
 | 代码质量 | `ruff` + `mypy` | 代码规范检查与静态类型检查 |
+
+### 原创功能模块
+
+以下模块为 vType 项目自主设计与实现，第三方库仅作为底层原语调用：
+
+| 原创模块 | 文件 | 说明 |
+|----------|------|------|
+| 配置中心 | `config.py` | 17 项参数环境变量覆盖、运行时校验、字典导出 |
+| 人声检测状态机 | `core/detector.py` | WebRTC VAD 三态切换（监听/录制/静音）、滑动窗口防抖、静音切片 |
+| 音频流管理 | `core/audio.py` | PortAudio 回调线程极简设计（< 50μs）、硬件设备枚举 |
+| ASR 推理引擎 | `core/recognizer.py` | faster-whisper 单例封装、int8 量化、initial_prompt 繁简引导 |
+| 键盘模拟输出 | `core/typer.py` | pynput 逐字输入 + 剪贴板兜底自动降级 |
+| 核心调度器 | `core/manager.py` | 3 线程拓扑管理、生命周期状态机、优雅停止序列、模型缓存复用 |
+| CLI 入口 | `main.py` | Click 多级命令、信号处理、KeyMonitor 集成、本地化日志拦截 |
+| 热键监听 | `utils/key_monitor.py` | 全局 push-to-talk、组合键、按下/释放手动追踪 |
+| 剪贴板封装 | `utils/clipboard.py` | pyperclip + pynput 快捷键模拟、跨平台错误抑制 |
 
 ---
 
@@ -154,7 +171,7 @@ vType/
 - **pip**（Python 包管理器）
 - 可正常工作的麦克风
 
-### 快速安装
+### 快速安装（推荐）
 
 ```bash
 # 克隆仓库
@@ -168,10 +185,20 @@ python -m venv .venv
 # macOS / Linux：
 source .venv/bin/activate
 
-# 安装生产依赖
-pip install -r requirements.txt
+# 一键安装（含 CLI 入口）
+pip install -e .
 
+# 启动语音输入
+vtype start
 ```
+
+> `pip install -e .` 会自动安装所有依赖并注册 `vtype` 命令行工具，无需手动操作 `requirements.txt`。
+
+### 手动安装（备选）
+
+```bash
+pip install -r requirements.txt
+python main.py
 ```
 
 ### 中国大陆用户：加速模型下载
