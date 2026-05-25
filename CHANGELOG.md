@@ -25,8 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - 测试排序 Bug：`pytest tests/` 按字母序运行时 hang（根因：`test_config.py` autouse fixture 删除 `sys.modules["config"]` 未恢复，导致 `test_main.py` 模块身份不一致触发死锁）
+- **T-01**：模型重复加载 — `CoreManager._cleanup()` 保留 `_recognizer` 引用，`_create_modules()` 复用已加载模型（`core/manager.py:376-395, 500-505`）
+- **T-06**：Git remote URL 含明文 PAT Token — 切换为 SSH（`git@github.com:heguang123456/vType.git`）
 
 ### Documentation
+
+- **T-02**：README 新增「中国大陆用户：加速模型下载」章节（`HF_ENDPOINT` 镜像配置）
+- **T-03**：README 新增「Windows 用户：文件系统兼容性设置」章节（symlinks 警告处理）
+- **T-04**：README 扩展 Git Flow 标准工作流 + 发布流程 + Phase 2-3 教训
+- `docs/OPTIMIZATION.md`：优化日志重构，按时间倒序，记录 4 项已修复 + 2 项流程记录
 
 - `docs/specs/feat-config.md` — M-01 需求规格
 - `docs/specs/feat-audio.md` — M-02 需求规格
