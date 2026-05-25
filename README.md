@@ -271,7 +271,7 @@ pip install webrtcvad-wheels>=2.0.10
 
 ## 使用说明
 
-> ⚠️ **全部模块已实现** — 9 个模块 279 个测试全部通过。可使用 `vtype start` 启动语音输入。需先安装依赖并下载 Whisper 模型。
+>  **全部模块已实现** — 9 个模块 279 个测试全部通过。可使用 `vtype start` 启动语音输入。需先安装依赖并下载 Whisper 模型。
 
 ### 配置验证（当前可用）
 
@@ -439,7 +439,7 @@ git push origin develop
 git branch -d release/v0.2.0
 ```
 
-> ⚠️ **教训：Phase 2-3 期间**，M-04~M-09 的 5 个 commit 直接落在 develop 分支，未创建 `feat/phase2-*` / `feat/phase3-*` 分支。commit 历史无法改写，后续所有新功能必须严格遵守上述流程。
+>  **教训：Phase 2-3 期间**，M-04~M-09 的 5 个 commit 直接落在 develop 分支，未创建 `feat/phase2-*` / `feat/phase3-*` 分支。commit 历史无法改写，后续所有新功能必须严格遵守上述流程。
 
 ### 提交规范（Conventional Commits）
 
