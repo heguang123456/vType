@@ -5,6 +5,29 @@ All notable changes to vType will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.1.0] - 2026-05-25
+
+### Added
+
+- 全部 9 个核心模块实现（M-01 ~ M-09），详见 README
+- 全量日志/UI 汉化：所有 logger、CLI banner、shutdown summary、错误提示均改为中文
+- Whisper 繁→简修复：`initial_prompt` 引导 + `zhconv` 保底后处理
+- push-to-talk 模式：按住说话松开识别，`--record-mode push_to_talk` 启用
+- `pyproject.toml`：支持 `pip install -e .` 一键安装 + `vtype` CLI 入口
+- `LICENSE`：MIT 开源协议
+- `.github/pull_request_template.md`：PR 标准模板（功能/思路/测试必填）
+- README 原创功能模块声明表
+
+### Changed
+
+- `SILENCE_LIMIT_MS` 默认值 800→1500ms，优化 VAD 切分策略
+
+### Fixed
+
+- 测试排序 Bug：`pytest tests/` 按字母序运行时 hang（根因：`test_config.py` autouse fixture 删除 `sys.modules["config"]` 未恢复）
+- **T-01**：模型重复加载 — `_cleanup()` 保留 `_recognizer` 引用，`_create_modules()` 复用
+- **T-06**：Git remote URL 含明文 PAT Token — 切换为 SSH
+
 ## [Unreleased]
 
 ### Added

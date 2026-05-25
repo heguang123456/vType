@@ -1,13 +1,13 @@
 # vType 项目状态 — 交接日志
 
-> 最后更新：2026-05-25 19:33
+> 最后更新：2026-05-25 23:05
 > 压缩方式：Context Compressor v1.0
 
 ## 版本信息
 
-- **当前版本**：v0.1.0
+- **当前版本**：v0.1.0（已打 tag 并推送远端）
 - **分支**：`develop`（已合入 `main`，worktree clean）
-- **状态**：可发布 — 核心功能全部完成
+- **状态**：可发布 — 核心功能全部完成 + 竞赛合规整改
 
 ## 核心指标
 
@@ -59,18 +59,25 @@
     ├── docs/ 文档（需求规格 specs、实现文档 impls）
     │   ├── impls/（8 份实现文档）
     │   ├── specs/（9 份需求规格）
-    │   └── OPTIMIZATION.md
+    │   ├── OPTIMIZATION.md
+    │   └── COMPLIANCE_AUDIT.md ← 竞赛规范合规审计报告
     ├── tests/ 测试套件（pytest，10 个测试文件）
     ├── utils/ 工具模块
     │   ├── clipboard.py ← 剪贴板操作：pyperclip + pynput 快捷键模拟
     │   └── key_monitor.py ← 全局热键监听：push-to-talk 交互，组合键支持
-    ├── config.py ← 全局配置中心：16 项核心参数，环境变量 VTYPE_* 覆盖
+    ├── config.py ← 全局配置中心：17 项核心参数，环境变量 VTYPE_* 覆盖
     ├── main.py ← CLI 入口：Click 框架，vtype start/devices/config 命令
-    └── [配置文件] requirements.txt, requirements-dev.txt, CHANGELOG.md, README.md
+    ├── .github/pull_request_template.md ← PR 标准模板
+    ├── pyproject.toml ← 一键安装 + vtype CLI 入口
+    └── [配置文件] requirements.txt, requirements-dev.txt, LICENSE, CHANGELOG.md, README.md
 ```
 
 ## 最近变更（最近 3 天）
 
+- **release**: v0.1.0 正式发布，develop → release/v0.1.0 → main，tag 已推送远端
+- **chore**: 竞赛合规整改 — PR 模板 / MIT LICENSE / pyproject.toml / README 原创声明 / 审计报告
+- **feat**: 繁简转换（initial_prompt + zhconv 保底）/ push-to-talk 模式 / 全量日志汉化
+- **docs**: README 补充原创功能模块声明 + 一键安装流程
 - **fix**: Git remote URL 含明文 PAT Token — 切换为 SSH（T-06，安全修复）
 - **fix**: 模型重复加载 — `_cleanup()` 保留 Recognizer 引用，stop+start 复用模型（T-01）
 - **docs**: README 新增 HF Hub 国内镜像配置 + Windows symlinks 兼容性章节（T-02, T-03）
@@ -110,7 +117,7 @@
 - **线程拓扑**：3 工作线程（detector/recognizer/typer）+ 1 PortAudio 回调线程
 - **数据管道**：`audio_queue (Queue[bytes])` → `text_queue (Queue[str])` 两阶段
 - **状态机**：采集器 LISTENING↔RECORDING，消费者 IDLE↔TRANSCRIBING↔TYPING
-- **硬性指标**：SAMPLE_RATE=16000, CHANNELS=1, FRAME_DURATION=20ms, SILENCE_LIMIT=800ms, MODEL=base, COMPUTE=int8
+- **硬性指标**：SAMPLE_RATE=16000, CHANNELS=1, FRAME_DURATION=20ms, SILENCE_LIMIT=1500ms, MODEL=base, COMPUTE=int8
 
 <!-- SPLIT: status | todo | architecture -->
 <!-- status: 版本信息 + 核心指标 -->
