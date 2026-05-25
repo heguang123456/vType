@@ -171,10 +171,57 @@ source .venv/bin/activate
 # 安装生产依赖
 pip install -r requirements.txt
 
-# （中国大陆用户）设置 HuggingFace 镜像加速模型下载
-# PowerShell：$env:HF_ENDPOINT = "https://hf-mirror.com"
-# Bash：     export HF_ENDPOINT=https://hf-mirror.com
 ```
+```
+
+### 中国大陆用户：加速模型下载
+
+首次运行 `vtype start` 时，`faster-whisper` 会从 HuggingFace Hub 下载 Whisper 模型（约 140MB）。国内直连 HuggingFace 可能遇到限速或超时。推荐使用镜像：
+
+```bash
+# 临时设置（仅当前终端会话有效）
+# PowerShell：
+$env:HF_ENDPOINT = "https://hf-mirror.com"
+# Bash / Git Bash：
+export HF_ENDPOINT=https://hf-mirror.com
+
+# 永久设置（推荐）
+# PowerShell（用户级）：
+[Environment]::SetEnvironmentVariable("HF_ENDPOINT", "https://hf-mirror.com", "User")
+# Bash（追加到 ~/.bashrc）：
+echo 'export HF_ENDPOINT=https://hf-mirror.com' >> ~/.bashrc
+```
+
+> **备选镜像**：
+> - `https://hf-mirror.com`（推荐，国内访问稳定）
+> - `https://huggingface.co`（官方，需稳定网络）
+>
+> 设置后，模型文件缓存在 `~/.cache/huggingface/hub/`，后续启动无需重新下载。
+
+### Windows 用户：文件系统兼容性设置
+
+Windows 未开启「开发者模式」时，`huggingface_hub` 无法创建符号链接（symlinks），会退化为文件复制并输出警告：
+
+```
+WARNING: Failed to create symlink ... File exists
+```
+
+两种解决方案（任选其一）：
+
+**方案 A（推荐）：设置环境变量消隐警告**
+
+```powershell
+# PowerShell（永久生效）
+[Environment]::SetEnvironmentVariable("HF_HUB_DISABLE_SYMLINKS_WARNING", "1", "User")
+```
+
+此选项仅消除警告，模型缓存仍使用文件复制，功能完全正常，磁盘占用略增加。
+
+**方案 B：开启 Windows 开发者模式**
+
+「设置 → 隐私和安全性 → 开发者选项 → 开发人员模式」→ 开启。开启后 `huggingface_hub` 可创建真正的符号链接，节省磁盘空间。
+
+### Python 3.12+ 用户注意
 
 ### 各平台注意事项
 
@@ -196,7 +243,7 @@ pip install webrtcvad-wheels>=2.0.10
 
 ## 使用说明
 
-> ⚠️ **全部模块已实现** — 9 个模块 276 个测试全部通过。可使用 `vtype start` 启动语音输入。需先安装依赖并下载 Whisper 模型。
+> ⚠️ **全部模块已实现** — 9 个模块 279 个测试全部通过。可使用 `vtype start` 启动语音输入。需先安装依赖并下载 Whisper 模型。
 
 ### 配置验证（当前可用）
 
@@ -305,9 +352,66 @@ main          ─── 生产发布
 
 **规则：**
 - **禁止直接向 `main` 提交**。
+- **禁止直接向 `develop` 提交功能代码**（bugfix 除外）。所有新功能必须走 `feat/*` 分支。
 - 功能分支在合并前需 rebase 到 `develop`。
 - 合并到 `develop` 使用 `--no-ff` 保留分支拓扑。
 - 个人分支推送使用 `--force-with-lease`。
+
+**标准工作流程：**
+
+```bash
+# 1. 从 develop 创建功能分支
+git checkout develop
+git pull origin develop
+git checkout -b feat/my-feature
+
+# 2. 开发 + 原子化提交
+git add <files>
+git commit -m "feat(scope): 实现某某功能"
+
+# 3. 变基到最新 develop（保持线性历史）
+git fetch origin develop
+git rebase origin/develop
+
+# 4. 推送功能分支
+git push origin feat/my-feature --force-with-lease
+
+# 5. 创建 PR / 本地合并到 develop
+git checkout develop
+git pull origin develop
+git merge --no-ff feat/my-feature -m "feat(scope): 合并某某功能"
+git push origin develop
+
+# 6. 清理功能分支
+git branch -d feat/my-feature
+git push origin --delete feat/my-feature
+```
+
+### 发布流程
+
+```bash
+# 1. 从 develop 创建 release 分支
+git checkout -b release/v0.2.0 develop
+
+# 2. 在 release 分支上做最终修正（文档、版本号等）
+#    禁止加新功能，只做 bugfix 和文档更新
+
+# 3. 合并到 main（--no-ff）+ 打 tag
+git checkout main
+git merge --no-ff release/v0.2.0 -m "release: v0.2.0"
+git tag -a v0.2.0 -m "v0.2.0 - 新增持续聆听模式"
+git push origin main --follow-tags
+
+# 4. 反向合并到 develop（确保 main 的修复回到 develop）
+git checkout develop
+git merge --no-ff release/v0.2.0 -m "chore: 反向合并 release/v0.2.0"
+git push origin develop
+
+# 5. 删除 release 分支
+git branch -d release/v0.2.0
+```
+
+> ⚠️ **教训：Phase 2-3 期间**，M-04~M-09 的 5 个 commit 直接落在 develop 分支，未创建 `feat/phase2-*` / `feat/phase3-*` 分支。commit 历史无法改写，后续所有新功能必须严格遵守上述流程。
 
 ### 提交规范（Conventional Commits）
 
