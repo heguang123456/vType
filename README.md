@@ -10,7 +10,7 @@
 
 专为 **Vibe Coding** 工作流设计：高内聚、低耦合、极致 CPU 优化、零网络依赖。
 
-🎥 **语音输入法视频演示**：[点击观看](https://www.alipan.com/s/jTcwbR8Rsi9)
+ **语音输入法视频演示**：[点击观看](https://www.alipan.com/s/jTcwbR8Rsi9)
 ---
 
 ## 目录
