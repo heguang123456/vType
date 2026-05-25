@@ -374,13 +374,21 @@ class CoreManager:
         logger.info("Creating submodules...")
 
         # 1. Recognizer (heavy: model download/loading)
-        self._recognizer = Recognizer(
-            model_size=self._cfg["model_size"],
-            compute_type=self._cfg["compute_type"],
-            device=self._cfg["device"],
-            language=self._cfg["language"],
-            beam_size=self._cfg["beam_size"],
-        )
+        # Reuse existing model if params haven't changed (avoids 5-15s reload)
+        if self._recognizer is not None and self._recognizer_matches_cfg():
+            logger.info(
+                "Reusing existing WhisperModel (same model_size=%s, language=%s)",
+                self._cfg["model_size"],
+                self._cfg["language"],
+            )
+        else:
+            self._recognizer = Recognizer(
+                model_size=self._cfg["model_size"],
+                compute_type=self._cfg["compute_type"],
+                device=self._cfg["device"],
+                language=self._cfg["language"],
+                beam_size=self._cfg["beam_size"],
+            )
 
         # 2. AudioCapture (validates microphone availability)
         self._audio = AudioCapture(
@@ -406,6 +414,28 @@ class CoreManager:
         )
 
         logger.info("All 4 submodules created")
+
+    # ------------------------------------------------------------------
+    # Internal: Recognizer Cache
+    # ------------------------------------------------------------------
+
+    def _recognizer_matches_cfg(self) -> bool:
+        """Check if the cached Recognizer matches the current config.
+        
+        Compares only the parameters that affect model loading: model_size
+        and language. If compute_type, device, or beam_size change, the
+        user likely wants a full reload — in that case, we don't check
+        those and let _create_modules() recreate the Recognizer.
+
+        Returns:
+            True if the existing Recognizer can be reused.
+        """
+        if self._recognizer is None:
+            return False
+        return (
+            self._recognizer.model_size == self._cfg["model_size"]
+            and self._recognizer.language == self._cfg["language"]
+        )
 
     # ------------------------------------------------------------------
     # Internal: Thread Management
@@ -505,7 +535,9 @@ class CoreManager:
         """
         self._audio = None
         self._detector = None
-        self._recognizer = None
+        # NOTE: _recognizer is preserved across stop/start cycles to avoid
+        # reloading the Whisper model (5-15s). It is only recreated when
+        # model_size or language changes.
         self._typer = None
         self._task_queue = None
         self._result_queue = None

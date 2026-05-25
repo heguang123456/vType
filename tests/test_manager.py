@@ -42,6 +42,8 @@ def _create_mock_submodules():
     mock_detector.total_slices = 0
 
     mock_recognizer = mock.MagicMock()
+    mock_recognizer.model_size = "base"
+    mock_recognizer.language = "zh"
     mock_typer = mock.MagicMock()
 
     return {
@@ -400,13 +402,14 @@ class TestStop:
         assert manager.status == ManagerStatus.IDLE
 
     def test_stop_cleans_up_references(self, mock_modules, mock_thread, manager):
-        """stop() should set all internal references to None."""
+        """stop() should set all internal references to None (except _recognizer)."""
         manager.start()
         manager.stop()
 
         assert manager._audio is None
         assert manager._detector is None
-        assert manager._recognizer is None
+        # _recognizer is preserved to avoid model reload on next start()
+        assert manager._recognizer is not None
         assert manager._typer is None
         assert manager._task_queue is None
         assert manager._result_queue is None
@@ -626,3 +629,57 @@ class TestConfigOverrides:
 
         assert mgr._task_queue.maxsize == 5
         assert mgr._result_queue.maxsize == 5
+
+
+# ============================================================================
+# Test: Recognizer reuse across stop/start cycles
+# ============================================================================
+
+
+class TestRecognizerReuse:
+    """Recognizer is preserved across stop/start to avoid model reload."""
+
+    def test_recognizer_preserved_after_stop(self, mock_modules, mock_thread):
+        """After stop(), _recognizer should NOT be None (model cached)."""
+        mgr = CoreManager()
+        mgr.start()
+        mgr.stop()
+
+        assert mgr._recognizer is not None
+        assert mgr._recognizer is mock_modules["recognizer"]
+
+    def test_recognizer_reused_on_restart(self, mock_modules, mock_thread):
+        """Restart with same params should NOT recreate Recognizer."""
+        mgr = CoreManager()
+        mgr.start()
+        mgr.stop()
+
+        mgr.start()
+        # Recognizer constructor should only be called once
+        assert mock_modules["Recognizer"].call_count == 1
+
+    def test_new_instance_always_creates_recognizer(self, mock_thread):
+        """A new CoreManager instance always creates a new Recognizer."""
+        with mock.patch(
+            "core.manager.AudioCapture"
+        ) as mc_audio, mock.patch(
+            "core.manager.VoiceDetector"
+        ) as _mc_detector, mock.patch(
+            "core.manager.Recognizer"
+        ) as mc_recognizer, mock.patch(
+            "core.manager.TypeWriter"
+        ) as _mc_typer:
+            mc_audio.return_value.raw_queue = queue.Queue()
+            mc_recognizer.return_value.model_size = "base"
+            mc_recognizer.return_value.language = "zh"
+
+            mgr = CoreManager(model_size="base")
+            mgr.start()
+            assert mc_recognizer.call_count == 1
+
+            mgr.stop()
+
+            # New instance with different model_size — always creates new Recognizer
+            mgr2 = CoreManager(model_size="large")
+            mgr2.start()
+            assert mc_recognizer.call_count == 2  # new instance → new Recognizer
